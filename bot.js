@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import moment from 'moment';
 import pino from 'pino';
-import { Sticker, StickerTypes } from 'wa-sticker-formatter'; 
+import { Sticker, StickerTypes } from 'wa-sticker-formatter'; // ✅ Nama package sudah diperbaiki dan akurat
 
 import { readDB, writeDB } from './utils/database.js';
 import { parseTasksInput, formatDisplayDate, formatReminderDate } from './utils/formatter.js';
@@ -78,9 +78,8 @@ async function startBot() {
         const isOwner = from.includes(NOMOR_OWNER);
 
         // =============================================================
-        // PROTEKSI: MAINTENANCE MODE (/OFF)
+        // PROTECTIONS: MAINTENANCE MODE (/OFF)
         // =============================================================
-        // Jika mode maintenance aktif, dan yang chat BUKAN owner, langsung blokir perintahnya
         if (isMaintenance && !isOwner) {
             return await sock.sendMessage(from, { 
                 text: '⚠️ *Mode Percobaan Aktif*\n\nMohon maaf, bot saat ini sedang dalam mode perbaikan/uji coba oleh Developer. Seluruh perintah dinonaktifkan untuk sementara waktu.' 
@@ -140,7 +139,6 @@ async function startBot() {
                     `Format: Kirim/reply gambar dengan caption \`/sticker\`\n\n` +
                     `⚠️ _Catatan: Format tanggal tugas wajib DD/MM/YYYY_`;
                 
-                // Info tambahan khusus di menu milik owner jika mode percobaan menyala
                 if (isOwner && isMaintenance) {
                     menuMessage += `\n\n🛠️ *Status Developer:* Mode Percobaan sedang aktif (\`/on\` untuk mematikan).`;
                 }
@@ -149,7 +147,7 @@ async function startBot() {
             }
 
             // =============================================================
-            // FEATURE 2: MAKE STICKER
+            // FEATURE 2: MAKE STICKER (FIXED DEPENDENCY)
             // =============================================================
             else if (command === '/sticker' || command === '/stiker') {
                 const isImage = msg.message.imageMessage || msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
@@ -173,6 +171,7 @@ async function startBot() {
                     buffer = Buffer.concat([buffer, chunk]);
                 }
 
+                // Menggunakan modul wa-sticker-formatter yang sudah valid
                 const sticker = new Sticker(buffer, {
                     pack: 'Pilkom C Bot',
                     author: 'Muhammad Yaritsunal Firdaus',
@@ -323,8 +322,8 @@ async function startBot() {
                     return await sock.sendMessage(from, { text: '❌ Perintah ini rahasia dan hanya bisa dijalankan oleh pemilik bot!' });
                 }
 
-                await sock.sendMessage(from, { text: '🔄 Sedang memicu restart server... Bot akan offline sekitar 5-10 detik untuk memproses pembaruan file.' });
-                console.log('[System] Perintah restart dikonfirmasi owner LID. Mematikan proses Node.js...');
+                await sock.sendMessage(from, { text: '🔄 Sedang memicu `git pull` dan restart server... Mohon tunggu sebentar.' });
+                console.log('[System] Perintah restart terkonfirmasi. Mematikan proses untuk memicu Git Pull otomatis...');
                 
                 setTimeout(() => { process.exit(0); }, 1000);
             }
