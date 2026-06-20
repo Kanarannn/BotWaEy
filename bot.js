@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import moment from 'moment';
 import pino from 'pino';
-import { Sticker, StickerTypes } from 'wa-sticker-formatter'; // ✅ Nama package sudah diperbaiki dan akurat
 
 import { readDB, writeDB } from './utils/database.js';
 import { parseTasksInput, formatDisplayDate, formatReminderDate } from './utils/formatter.js';
@@ -12,10 +11,8 @@ import { initScheduler } from './utils/scheduler.js';
 
 dotenv.config();
 
-// ID LID Unik Akun WhatsApp Kamu (Sebagai Owner)
 const NOMOR_OWNER = "115324787654708";
 
-// Variabel Global untuk status Maintenance Mode (Default: matikan/false)
 let isMaintenance = false;
 
 async function startBot() {
@@ -25,9 +22,10 @@ async function startBot() {
         logger: pino({ level: 'silent' }), 
         auth: state,
         printQRInTerminal: false,
-        browser: Browsers.windows('Chrome'),
+        browser: Browsers.ubuntu('Chrome'), 
         connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: undefined
+        defaultQueryTimeoutMs: undefined,
+        syncFullHistory: false
     });
 
     sock.ev.on('connection.update', (update) => {
@@ -74,12 +72,8 @@ async function startBot() {
         const command = firstLine.split(' ')[0].toLowerCase();
         const argsText = body.trim().substring(command.length).trim();
 
-        // Cek apakah pengirim adalah kamu (Owner) berdasarkan ID LID
         const isOwner = from.includes(NOMOR_OWNER);
 
-        // =============================================================
-        // PROTECTIONS: MAINTENANCE MODE (/OFF)
-        // =============================================================
         if (isMaintenance && !isOwner) {
             return await sock.sendMessage(from, { 
                 text: '⚠️ *Mode Percobaan Aktif*\n\nMohon maaf, bot saat ini sedang dalam mode perbaikan/uji coba oleh Developer. Seluruh perintah dinonaktifkan untuk sementara waktu.' 
@@ -89,9 +83,6 @@ async function startBot() {
         console.log(`[Log Perintah] Menjalankan ${command} dari JID: ${from} (Status Owner: ${isOwner})`);
 
         try {
-            // =============================================================
-            // FEATURE TOGGLE: MODE MAINTENANCE (HANYA OWNER 👑)
-            // =============================================================
             if (command === '/off') {
                 if (!isOwner) {
                     return await sock.sendMessage(from, { text: '❌ Perintah ini rahasia dan hanya bisa dijalankan oleh pemilik bot!' });
@@ -120,9 +111,81 @@ async function startBot() {
                 return await sock.sendMessage(from, { text: '🔛 *Maintenance Mode: OFF*\n\nBot kembali ke mode publik! Semua user sekarang sudah bisa mengakses fitur bot kembali seperti semula.' });
             }
 
-            // =============================================================
-            // FEATURE 1: MENU / HELP
-            // =============================================================
+            else if (command === '/status') {
+                if (!isOwner) {
+                    return await sock.sendMessage(from, { text: '❌ Perintah ini rahasia dan hanya bisa dijalankan oleh pemilik bot!' });
+                }
+
+                await sock.sendMessage(from, { text: '📊 Sedang mengambil data metrik dari server WispByte, mohon tunggu...' });
+
+                const memoryUsage = process.memoryUsage();
+                const ramDipakai = (memoryUsage.rss / 1024 / 1024).toFixed(2);
+                const heapTotal = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
+                const heapUsed = (memoryUsage.heapUsed / 1024 / 1024).toFixed(2);
+
+                const os = await import('os');
+                const uptimeServer = os.uptime();
+                const uptimeBot = process.uptime();
+
+                const formatUptime = (seconds) => {
+                    const d = Math.floor(seconds / (3600*24));
+                    const h = Math.floor(seconds % (3600*24) / 3600);
+                    const m = Math.floor(seconds % 3600 / 60);
+                    const s = Math.floor(seconds % 60);
+                    return `${d > 0 ? d + 'hari ' : ''}${h}jam ${m}menit ${s}detik`;
+                };
+
+                const cpus = os.cpus();
+                const modelCPU = cpus.length > 0 ? cpus[0].model : 'Unknown CPU';
+                const totalCore = cpus.length;
+                const loadAvg = os.loadavg();
+
+                const statusMessage = `📊 *LAPORAN METRIK SERVER WISPBYTE* 🖥️\n\n` +
+                    `👑 *Status Sesi:* Terhubung sebagai Owner\n` +
+                    `🛠️ *Mode Bot:* ${isMaintenance ? '🛠️ Mode Percobaan (OFF)' : '🔛 Publik (ON)'}\n\n` +
+                    `🧠 *PENGGUNAAN MEMORI (RAM):*\n` +
+                    `▪️ Alokasi RAM Bot: *${ramDipakai} MB*\n` +
+                    `▪️ Heap Virtual Terpakai: *${heapUsed} MB* / ${heapTotal} MB\n\n` +
+                    `⚡ *PERFORMA CPU & SISTEM:*\n` +
+                    `▪️ Model Prosesor: \`${modelCPU}\`\n` +
+                    `▪️ Total Alokasi Core: *${totalCore} vCPU Core*\n` +
+                    `▪️ Beban Kerja (Load Avg): *${loadAvg[0].toFixed(2)}* (1 mnt terakhir)\n\n` +
+                    `⏱️ *WAKTU AKTIF (UPTIME):*\n` +
+                    `▪️ Uptime Bot: _${formatUptime(uptimeBot)}_\n` +
+                    `▪️ Uptime Node Server: _${formatUptime(uptimeServer)}_\n\n` +
+                    `📅 *Waktu Pengecekan:* ${moment().format('DD MMMM YYYY - HH:mm:ss')} WIB`;
+
+                return await sock.sendMessage(from, { text: statusMessage });
+            }
+
+            else if (command === '/info') {
+                const infoMessage = `✨ *PROFIL DEVELOPER BOT* ✨\n\n` +
+                    `👤 *Nama:* Muhammad Yaritsunal Firdaus (Firdaus)\n` +
+                    `🎓 *Status:* Student at Computer Science, UPI Bandung\n` +
+                    `💼 *Jabatan:* General Secretary of Student Organization\n\n` +
+                    `🌐 *Media Sosial & Kontak:*\n` +
+                    `📸 Instagram: @knfrdss\n` +
+                    `💻 GitHub: github.com/yaritsunal\n` +
+                    `✉️ Email: yaritsunal@gmail.com\n\n` +
+                    `💬 _"Coding dengan logika, memimpin dengan rasa. Bot ini didevelop untuk mempermudah manajemen tugas perkuliahan kita agar tetap terstruktur dan anti-prokrastinasi!"_`;
+                
+                return await sock.sendMessage(from, { text: infoMessage });
+            }
+
+            else if (command === '/donate' || command === '/donasi') {
+                const donateMessage = `☕ *SUPPORT & DONASI BOT TUGAS* ☕\n\nHalo! Jika bot ini dirasa bermanfaat membantu keseharian kuliahmu, kamu bisa mendukung biaya sewa server panel WispByte dan operasional pengembangannya lewat platform di bawah ini:\n\n` +
+                    `💳 *E-Wallet & Bank:*\n` +
+                    `▪️ *Dana:* 0851-XXXX-XXXX (a.n. Muhammad Yaritsunal)\n` +
+                    `▪️ *Gopay / OVO:* 0851-XXXX-XXXX\n` +
+                    `▪️ *Bank BCA:* 139-XXXX-XXX\n\n` +
+                    `🌐 *Digital Support:*\n` +
+                    `▪️ *Saweria:* saweria.co/knfrdss\n` +
+                    `▪️ *Trakteer:* trakteer.id/knfrdss\n\n` +
+                    `Berapapun donasi yang kamu berikan akan sangat membantu bot ini tetap online 24 jam penuh tanpa iklan. Terima kasih banyak atas dukungannya! 🙏✨`;
+                
+                return await sock.sendMessage(from, { text: donateMessage });
+            }
+
             else if (command === '/menu' || command === '/help') {
                 let menuMessage = `📌 *DASHBOARD BOT TUGAS & UTILITY* 🖥️\n\nHalo! Berikut adalah daftar perintah yang bisa kamu gunakan:\n\n` +
                     `📝 *1. Tambah Tugas* (Multiline)\n` +
@@ -135,10 +198,14 @@ async function startBot() {
                     `Format: \`/selesai Nama Tugas\`\n\n` +
                     `🗑️ *5. Hapus Tugas*\n` +
                     `Format: \`/hapus Nama Tugas\`\n\n` +
-                    `🎨 *6. Buat Sticker*\n` +
-                    `Format: Kirim/reply gambar dengan caption \`/sticker\`\n\n` +
+                    `🎨 *6. Ubah Gambar ke Sticker*\n` +
+                    `Format: Reply gambar dengan \`/sticker\`\n\n` +
+                    `ℹ️ *7. Info Developer*\n` +
+                    `Format: \`/info\`\n\n` +
+                    `☕ *8. Donasi Server*\n` +
+                    `Format: \`/donate\`\n\n` +
                     `⚠️ _Catatan: Format tanggal tugas wajib DD/MM/YYYY_`;
-                
+
                 if (isOwner && isMaintenance) {
                     menuMessage += `\n\n🛠️ *Status Developer:* Mode Percobaan sedang aktif (\`/on\` untuk mematikan).`;
                 }
@@ -146,46 +213,6 @@ async function startBot() {
                 await sock.sendMessage(from, { text: menuMessage });
             }
 
-            // =============================================================
-            // FEATURE 2: MAKE STICKER (FIXED DEPENDENCY)
-            // =============================================================
-            else if (command === '/sticker' || command === '/stiker') {
-                const isImage = msg.message.imageMessage || msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-                const isVideo = msg.message.videoMessage || msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
-
-                if (!isImage && !isVideo) {
-                    return await sock.sendMessage(from, { text: '❌ Gagal. Pastikan kamu mengirim gambar/video dengan caption `/sticker` ATAU reply gambar/video yang sudah ada!' });
-                }
-
-                await sock.sendMessage(from, { text: '⏳ Sedang mengonversi media menjadi stiker, tunggu sebentar...' });
-
-                const mediaMessage = msg.message.imageMessage || msg.message.videoMessage || 
-                                     msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage || 
-                                     msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
-
-                const type = msg.message.imageMessage || msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ? 'image' : 'video';
-                
-                const stream = await downloadContentFromMessage(mediaMessage, type);
-                let buffer = Buffer.from([]);
-                for await (const chunk of stream) {
-                    buffer = Buffer.concat([buffer, chunk]);
-                }
-
-                // Menggunakan modul wa-sticker-formatter yang sudah valid
-                const sticker = new Sticker(buffer, {
-                    pack: 'Pilkom C Bot',
-                    author: 'Muhammad Yaritsunal Firdaus',
-                    type: StickerTypes.FULL,
-                    quality: 70
-                });
-
-                const stickerBuffer = await sticker.toBuffer();
-                await sock.sendMessage(from, { sticker: stickerBuffer });
-            }
-
-            // =============================================================
-            // FEATURE 3: TAMBAH TUGAS
-            // =============================================================
             else if (command === '/tambah') {
                 if (!argsText) {
                     return await sock.sendMessage(from, { text: '❌ Format salah. Contoh:\n/tambah Matematika - 18/06/2026' });
@@ -215,12 +242,25 @@ async function startBot() {
 
                 writeDB(db);
                 const totalAktif = db.filter(t => t.owner === from && t.status === 'aktif').length;
+                
                 await sock.sendMessage(from, { text: `✅ Berhasil disimpan!\n\n📚 *Daftar Tugas Baru*\n\n${responseList.join('\n\n')}\n\n🗂 Total tugas aktif: ${totalAktif}` });
+
+                setTimeout(async () => {
+                    const lastTask = parsedTasks[parsedTasks.length - 1];
+                    const objekMoment = moment(lastTask.deadline, 'YYYY-MM-DD');
+                    const sisaHari = objekMoment.diff(moment().startOf('day'), 'days');
+
+                    const reminderTemplate = `⏰ *PENGINGAT TUGAS AKADEMIK (AUTOMATIC)* ⏰\n\n` +
+                        `Halo! Sistem mendeteksi tugas kuliah baru terdaftar. Berikut adalah jadwal pengingat otomatisnya:\n\n` +
+                        `📝 *Tugas:* ${lastTask.nama}\n` +
+                        `📅 *Deadline:* ${formatDisplayDate(lastTask.deadline)}\n` +
+                        `⏳ *Sisa Waktu:* ${sisaHari <= 0 ? '*HARI INI BATASNYA!*' : `*${sisaHari} hari lagi*`}\n\n` +
+                        `💡 _Sistem otomatis akan mengingatkanmu kembali secara berkala. Ketik \`/selesai ${lastTask.nama}\` jika sudah rampung agar tugas diarsipkan!_`;
+
+                    await sock.sendMessage(from, { text: reminderTemplate });
+                }, 1500);
             }
 
-            // =============================================================
-            // FEATURE 4: LIHAT TUGAS AKTIF
-            // =============================================================
             else if (command === '/lihat') {
                 const db = readDB();
                 const userTasks = db.filter(t => t.owner === from && t.status === 'aktif');
@@ -233,9 +273,6 @@ async function startBot() {
                 await sock.sendMessage(from, { text: `📚 *Tugas Aktif Kamu*\n\n${responseList.join('\n\n')}` });
             }
 
-            // =============================================================
-            // FEATURE 5: EDIT TUGAS
-            // =============================================================
             else if (command === '/edit') {
                 if (!argsText || !argsText.includes('-')) {
                     return await sock.sendMessage(from, { text: '❌ Format salah.\n\nContoh: `/edit Tugas Lama - Tugas Baru - 25/06/2026`' });
@@ -272,9 +309,6 @@ async function startBot() {
                 await sock.sendMessage(from, { text: `✅ Tugas berhasil diperbarui!\n\n📝 Sebelum: *${namaLama}*\n✨ Menjadi: *${namaBaru}*\n📅 Deadline Baru: ${formatDisplayDate(deadlineBaru)}` });
             }
 
-            // =============================================================
-            // FEATURE 6: TANDAI TUGAS SELESAI
-            // =============================================================
             else if (command === '/selesai') {
                 const targetTask = argsText; 
                 if (!targetTask) {
@@ -293,9 +327,6 @@ async function startBot() {
                 await sock.sendMessage(from, { text: `✅ Tugas "${db[taskIndex].nama}" ditandai selesai.` });
             }
 
-            // =============================================================
-            // FEATURE 7: HAPUS TUGAS
-            // =============================================================
             else if (command === '/hapus') {
                 const targetTask = argsText; 
                 if (!targetTask) {
@@ -314,17 +345,47 @@ async function startBot() {
                 await sock.sendMessage(from, { text: `🗑️ Tugas "${targetTask}" berhasil dihapus.` });
             }
 
-            // =============================================================
-            // FEATURE EXTRA: RESTART BOT
-            // =============================================================
+            else if (command === '/sticker') {
+                const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+                if (!quoted) {
+                    return await sock.sendMessage(from, { text: '❌ Harus reply gambar terlebih dahulu!\n\nCara:\n1. Reply gambar dengan `/sticker`\n\n*Contoh:* Balas sticker dengan reply gambar' });
+                }
+
+                const imageMessage = quoted.imageMessage;
+                if (!imageMessage) {
+                    return await sock.sendMessage(from, { text: '❌ Pesan yang di-reply harus berupa gambar!' });
+                }
+
+                try {
+                    await sock.sendMessage(from, { text: '⏳ Sedang mengonversi gambar menjadi sticker...' });
+
+                    const stream = await downloadContentFromMessage(imageMessage, 'image');
+                    let buffer = Buffer.from([]);
+
+                    for await (const chunk of stream) {
+                        buffer = Buffer.concat([buffer, chunk]);
+                    }
+
+                    await sock.sendMessage(from, {
+                        sticker: buffer
+                    });
+
+                    console.log(`[Sticker] Sticker berhasil dibuat dari image`);
+                } catch (error) {
+                    console.error('Error sticker:', error);
+                    await sock.sendMessage(from, { text: '🚨 Gagal mengkonversi gambar menjadi sticker. Coba lagi!' });
+                }
+            }
+
             else if (command === '/restart') {
                 if (!isOwner) {
                     return await sock.sendMessage(from, { text: '❌ Perintah ini rahasia dan hanya bisa dijalankan oleh pemilik bot!' });
                 }
 
-                await sock.sendMessage(from, { text: '🔄 Sedang memicu `git pull` dan restart server... Mohon tunggu sebentar.' });
-                console.log('[System] Perintah restart terkonfirmasi. Mematikan proses untuk memicu Git Pull otomatis...');
-                
+                await sock.sendMessage(from, { text: '🔄 Server memproses pembaruan via GitHub. Bot akan menyala kembali dalam 5 detik...' });
+                console.log('[System] Menutup proses Node untuk memicu restart skrip panel...');
+
                 setTimeout(() => { process.exit(0); }, 1000);
             }
 

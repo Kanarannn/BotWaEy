@@ -7,9 +7,10 @@
     "start": "node bot.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.5.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
     "dotenv": "^16.0.0",
     "moment": "^2.30.1",
+    "node-cron": "^4.4.1",
     "pino": "^9.0.0",
     "qrcode-terminal": "^0.12.0",
     "uuid": "^14.0.0",
