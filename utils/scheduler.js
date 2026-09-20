@@ -16,6 +16,9 @@ export const initScheduler = (sock) => {
             const hariIni = moment().format('YYYY-MM-DD');
 
             for (let task of db) {
+                // Tugas yang deadline-nya belum diisi dilewati
+                if (!task.deadline) continue;
+
                 // Syarat: Status aktif, belum diingatkan, dan hari ini adalah H-1 deadline
                 const tanggalReminder = moment(task.deadline, 'YYYY-MM-DD').subtract(1, 'days').format('YYYY-MM-DD');
 
